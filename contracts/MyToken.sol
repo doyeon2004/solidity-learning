@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+//과제2
 pragma solidity ^0.8.28;
 
 contract MyToken {
@@ -26,7 +27,6 @@ contract MyToken {
         _mint(_amount * 10 ** uint256(decimals), msg.sender); // 1 MT
     }
 
-    // ✅ 수정: emit 순서 → msg.sender, spender, amount
     function approve(address spender, uint256 amount) external {
         allowance[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
@@ -57,3 +57,4 @@ contract MyToken {
         emit Transfer(msg.sender, to, amount);
     }
 }
+
