@@ -4,7 +4,6 @@ pragma solidity ^0.8.28;
 contract MyToken {
     event Transfer(address indexed from, address indexed to, uint256 value);
 
-    // ✅ 수정: 표준에 맞는 Approval 이벤트 정의
     event Approval(address indexed owner, address indexed spender, uint256 value);
 
     string public name;
