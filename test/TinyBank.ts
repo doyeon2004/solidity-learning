@@ -1,13 +1,14 @@
 import hre from "hardhat";
 import { expect } from "chai";
-import { MyToken, TinyBank } from "../typechain-types";
 import { DECIMALS, MINTING_AMOUNT } from "./constant";
+import { MyToken, TinyBank } from "../typechain-types";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 
 describe("TinyBank", () => {
   let signers: HardhatEthersSigner[];
   let myTokenC: MyToken;
   let tinyBankC: TinyBank;
+
   beforeEach(async () => {
     signers = await hre.ethers.getSigners();
     myTokenC = await hre.ethers.deployContract("MyToken", [
@@ -16,72 +17,36 @@ describe("TinyBank", () => {
       DECIMALS,
       MINTING_AMOUNT,
     ]);
+
+    const managers = signers.slice(0, 5).map((s) => s.address);
     tinyBankC = await hre.ethers.deployContract("TinyBank", [
       await myTokenC.getAddress(),
+      managers,
     ]);
     await myTokenC.setManager(await tinyBankC.getAddress());
   });
 
-  describe("Initialized state check", () => {
-    it("should return totalStaked 0", async () => {
-      expect(await tinyBankC.totalStaked()).equal(0);
-    });
-    it("should return staked 0 amount of signer0", async () => {
-      const signer0 = signers[0];
-      expect(await tinyBankC.staked(signer0.address)).equal(0);
-    });
+  it("should revert when not all managers confirmed", async () => {
+    await tinyBankC.connect(signers[0]).confirm();
+    await tinyBankC.connect(signers[1]).confirm();
+    await expect(
+      tinyBankC.connect(signers[0]).setRewardPerBlock(123)
+    ).to.be.revertedWith("Not all confirmed yet");
   });
 
-  describe("Staking", async () => {
-    it("should return staked amount", async () => {
-      const signer0 = signers[0];
-      const stakingAmount = hre.ethers.parseUnits("50", DECIMALS);
-      await myTokenC.approve(await tinyBankC.getAddress(), stakingAmount);
-      await tinyBankC.stake(stakingAmount);
-      expect(await tinyBankC.staked(signer0.address)).equal(stakingAmount);
-      expect(await tinyBankC.totalStaked()).equal(stakingAmount);
-      expect(await myTokenC.balanceOf(tinyBankC)).equal(
-        await tinyBankC.totalStaked()
-      );
-    });
+  it("should allow setRewardPerBlock after all managers confirm", async () => {
+    const newReward = hre.ethers.parseUnits("1234", DECIMALS);
+    for (let i = 0; i < 5; i++) {
+      await tinyBankC.connect(signers[i]).confirm();
+    }
+    await tinyBankC.connect(signers[0]).setRewardPerBlock(newReward);
+    const result = await tinyBankC.rewardPerBlock();
+    expect(result).to.equal(newReward);
   });
 
-  describe("Withdraw", async () => {
-    it("should return 0 staked after withdrawing total token", async () => {
-      const signer0 = signers[0];
-      const stakingAmount = hre.ethers.parseUnits("50", DECIMALS);
-      await myTokenC.approve(await tinyBankC.getAddress(), stakingAmount);
-      await tinyBankC.stake(stakingAmount);
-      await tinyBankC.withdraw(stakingAmount);
-      expect(await tinyBankC.staked(signer0.address)).equal(0);
-    });
-  });
-
-  describe("reward", () => {
-    it("should reward 1MT every blocks", async () => {
-      const signer0 = signers[0];
-      const stakingAmount = hre.ethers.parseUnits("50", DECIMALS);
-      await myTokenC.approve(await tinyBankC.getAddress(), stakingAmount);
-      await tinyBankC.stake(stakingAmount);
-
-      const BLOCKS = 5n;
-      const transferAmount = hre.ethers.parseUnits("1", DECIMALS);
-      for (var i = 0; i < BLOCKS; i++) {
-        await myTokenC.transfer(transferAmount, signer0.address);
-      }
-
-      await tinyBankC.withdraw(stakingAmount);
-      expect(await myTokenC.balanceOf(signer0.address)).equal(
-        hre.ethers.parseUnits((BLOCKS + MINTING_AMOUNT + 1n).toString())
-      );
-    });
-
-    it("Should revert when changing rewardPerBlock by hacker", async () => {
-      const hacker = signers[3];
-      const rewardToChange = hre.ethers.parseUnits("10000", DECIMALS);
-      await expect(
-        tinyBankC.connect(hacker).setRewardPerBlock(rewardToChange)
-      ).to.be.revertedWith("You are not authorized to manage this contract");
-    });
+  it("should revert if non-manager tries to confirm", async () => {
+    await expect(tinyBankC.connect(signers[5]).confirm()).to.be.revertedWith(
+      "You are not a manager"
+    );
   });
 });
