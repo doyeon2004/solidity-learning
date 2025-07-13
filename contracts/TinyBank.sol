@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import "./MultiManagedAccess.sol";
+import "./ManagedAccess.sol";
 
 interface IMyToken {
     function transfer(uint256 amount, address to) external;
@@ -9,20 +9,20 @@ interface IMyToken {
     function mint(uint256 amount, address owner) external;
 }
 
-contract TinyBank is MultiManagedAccess {
+contract TinyBank is ManagedAccess {
     event Staked(address from, uint256 amount);
     event Withdraw(uint256 amount, address to);
 
     IMyToken public stakingToken;
 
     mapping(address => uint256) public lastClaimedBlock;
-    uint256 public defaultRewardPerBlock = 1 * 10 ** 18;
     mapping(address => uint256) public staked;
     uint256 public totalStaked;
 
-    constructor(IMyToken _stakingToken, address[] memory _managers)
-        MultiManagedAccess(msg.sender, _managers, _managers.length)
-    {
+    uint256 defaultRewardPerBlock = 1 * 10 ** 18;
+    uint256 rewardPerBlock;
+
+    constructor(IMyToken _stakingToken) ManagedAccess(msg.sender, msg.sender) {
         stakingToken = _stakingToken;
         rewardPerBlock = defaultRewardPerBlock;
     }
@@ -35,6 +35,10 @@ contract TinyBank is MultiManagedAccess {
         }
         lastClaimedBlock[to] = block.number;
         _;
+    }
+
+    function setRewardPerBlock(uint256 _amount) external onlyManager {
+        rewardPerBlock = _amount;
     }
 
     function stake(uint256 _amount) external updateReward(msg.sender) {
@@ -53,11 +57,12 @@ contract TinyBank is MultiManagedAccess {
         emit Withdraw(_amount, msg.sender);
     }
 
-    function confirm() public override {
-        super.confirm();
-    }
-
-    function setRewardPerBlock(uint256 _amount) public override onlyAllConfirmed {
-        rewardPerBlock = _amount;
+    function currentReward(address to) external view returns (uint256) {
+        if (staked[to] > 0) {
+            uint256 blocks = block.number - lastClaimedBlock[to];
+            return (blocks * rewardPerBlock * staked[to]) / totalStaked;
+        } else {
+            return 0;
+        }
     }
 }

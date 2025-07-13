@@ -5,7 +5,7 @@ import "./ManagedAccess.sol";
 
 contract MyToken is ManagedAccess {
     event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(address indexed owner, address indexed spender, uint256 value);
+    event Approval(address indexed spender, uint256 amount);
 
     string public name;
     string public symbol;
@@ -20,17 +20,16 @@ contract MyToken is ManagedAccess {
         string memory _symbol,
         uint8 _decimal,
         uint256 _amount
-    ) ManagedAccess(msg.sender, msg.sender)  {
-
+    ) ManagedAccess(msg.sender, msg.sender) {
         name = _name;
         symbol = _symbol;
         decimals = _decimal;
-        _mint(_amount * 10 ** uint256(decimals), msg.sender); // 1 MT
+        _mint(_amount * 10 ** uint256(decimals), msg.sender);
     }
 
     function approve(address spender, uint256 amount) external {
         allowance[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
+        emit Approval(spender, amount);
     }
 
     function transferFrom(address from, address to, uint256 amount) external {
@@ -39,27 +38,29 @@ contract MyToken is ManagedAccess {
         allowance[from][spender] -= amount;
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
-
         emit Transfer(from, to, amount);
     }
+
     function mint(uint256 amount, address to) external onlyManager {
         _mint(amount, to);
     }
 
+    function faucet(uint256 amount) external {
+        _mint(amount, msg.sender);
+    }
+
     function setManager(address _manager) external onlyOwner {
-        manager = _manager;      
+        manager = _manager;
     }
 
     function _mint(uint256 amount, address to) internal {
         totalSupply += amount;
         balanceOf[to] += amount;
-
         emit Transfer(address(0), to, amount);
     }
 
     function transfer(uint256 amount, address to) external {
         require(balanceOf[msg.sender] >= amount, "insufficient balance");
-        
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
         emit Transfer(msg.sender, to, amount);
